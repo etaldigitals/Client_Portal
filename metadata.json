@@ -1,0 +1,6 @@
+{
+  "name": "ETAL Client Hub",
+  "description": "Premium agency client portal for ETAL Digital with role-based admin and client access, project tracking, file management, invoices, interactive meetings, feedback logs, and detailed analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
