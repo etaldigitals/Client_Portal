@@ -38,6 +38,7 @@ import ReportsView from './components/ReportsView';
 import InvoicesView from './components/InvoicesView';
 import MeetingsView from './components/MeetingsView';
 import ProfileView from './components/ProfileView';
+import { supabase } from './utils/supabaseClient';
 
 // Initial boilerplates datasets
 import { 
@@ -159,6 +160,319 @@ export default function App() {
     files, feedbacks, invoices, meetings, notifications, auditLogs
   ]);
 
+  // Supabase connection validation
+  const isSupabaseConfigured = 
+    (import.meta as any).env.VITE_SUPABASE_URL && 
+    (import.meta as any).env.VITE_SUPABASE_URL !== 'https://placeholder-url.supabase.co' &&
+    (import.meta as any).env.VITE_SUPABASE_ANON_KEY &&
+    (import.meta as any).env.VITE_SUPABASE_ANON_KEY !== 'placeholder-key';
+
+  // State sync and save helpers
+  const safeSupaInsert = async (table: string, record: any) => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const { error } = await supabase.from(table).upsert(record);
+      if (error) console.error(`[Supabase insert ${table}]:`, error);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const safeSupaDelete = async (table: string, id: string) => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const { error } = await supabase.from(table).delete().eq('id', id);
+      if (error) console.error(`[Supabase delete ${table}]:`, error);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // LOAD CLOUD DATA ON MOUNT
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    const loadAllDatabaseSyncData = async () => {
+      try {
+        const { data: c } = await supabase.from('clients').select('*');
+        if (c && c.length > 0) {
+          setClients(c.map(item => ({
+            id: item.id,
+            name: item.name,
+            industry: item.industry || '',
+            logo: item.logo || '',
+            email: item.email || '',
+            phone: item.phone || '',
+            address: item.address || '',
+            status: (item.status as any) || 'active',
+            joinedAt: item.joined_at || '',
+            password: item.password || 'client123'
+          })));
+        }
+
+        const { data: p } = await supabase.from('projects').select('*');
+        if (p && p.length > 0) {
+          setProjects(p.map(item => ({
+            id: item.id,
+            name: item.name,
+            description: item.description || '',
+            clientId: item.client_id || '',
+            progress: Number(item.progress || 0),
+            status: (item.status as any) || 'planning',
+            startDate: item.start_date || '',
+            endDate: item.end_date || '',
+            budget: Number(item.budget || 0),
+            category: item.category || '',
+            tasks: (item.tasks as any) || []
+          })));
+        }
+
+        const { data: t } = await supabase.from('timeline').select('*');
+        if (t && t.length > 0) {
+          setTimeline(t.map(item => ({
+            id: item.id,
+            projectId: item.project_id || '',
+            clientId: item.client_id || '',
+            date: item.date || '',
+            title: item.title,
+            description: item.description || '',
+            type: (item.type || 'checkpoint') as any
+          })));
+        }
+
+        const { data: f } = await supabase.from('files').select('*');
+        if (f && f.length > 0) {
+          setFiles(f.map(item => ({
+            id: item.id,
+            name: item.name,
+            size: item.size || '0 KB',
+            category: (item.category as any) || 'spec',
+            uploadedBy: item.uploaded_by || 'Admin',
+            uploadedAt: item.uploaded_at || '',
+            version: Number(item.version || 1),
+            clientId: item.client_id || '',
+            projectId: item.project_id || '',
+            versions: (item.versions as any) || []
+          })));
+        }
+
+        const { data: fb } = await supabase.from('feedbacks').select('*');
+        if (fb && fb.length > 0) {
+          setFeedbacks(fb.map(item => ({
+            id: item.id,
+            clientId: item.client_id || '',
+            projectId: item.project_id || '',
+            authorName: item.author_name || 'Anonymous',
+            text: item.text || '',
+            rating: Number(item.rating || 5),
+            status: (item.status as any) || 'pending',
+            createdAt: item.created_at || '',
+            replies: (item.replies as any) || []
+          })));
+        }
+
+        const { data: inv } = await supabase.from('invoices').select('*');
+        if (inv && inv.length > 0) {
+          setInvoices(inv.map(item => ({
+            id: item.id,
+            invoiceNo: item.invoice_no || '',
+            clientId: item.client_id || '',
+            description: item.description || '',
+            amount: Number(item.amount || 0),
+            status: item.status as any,
+            issuedAt: item.issued_at || '',
+            dueDate: item.due_date || '',
+            items: (item.items as any) || []
+          })));
+        }
+
+        const { data: mt } = await supabase.from('meetings').select('*');
+        if (mt && mt.length > 0) {
+          setMeetings(mt.map(item => ({
+            id: item.id,
+            title: item.title,
+            description: item.description || '',
+            datetime: item.datetime || '',
+            clientId: item.client_id || '',
+            meetLink: item.meet_link || '',
+            organizer: item.organizer || '',
+            notes: (item.notes as any) || [],
+            status: item.status as any
+          })));
+        }
+
+        const { data: n } = await supabase.from('notifications').select('*');
+        if (n && n.length > 0) {
+          setNotifications(n.map(item => ({
+            id: item.id,
+            clientId: item.client_id || undefined,
+            title: item.title,
+            text: item.text || '',
+            type: (item.type || 'info') as any,
+            createdAt: item.created_at || '',
+            read: !!item.read
+          })));
+        }
+
+        const { data: logs } = await supabase.from('audit_logs').select('*');
+        if (logs && logs.length > 0) {
+          setAuditLogs(logs.map(item => ({
+            id: item.id,
+            userId: item.user_id || '',
+            userName: item.user_name || 'System',
+            action: item.action,
+            details: item.details || '',
+            timestamp: item.timestamp || '',
+            clientId: item.client_id || undefined
+          })));
+        }
+      } catch (err) {
+        console.error('Offline loading fallback triggered:', err);
+      }
+    };
+
+    loadAllDatabaseSyncData();
+
+    // ⚡ REALTIME SYNC WORKFLOWS
+    const clientSub = supabase.channel('clients-realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => {
+      supabase.from('clients').select('*').then(({ data }) => {
+        if (data && data.length > 0) {
+          setClients(data.map(item => ({
+            id: item.id,
+            name: item.name,
+            industry: item.industry || '',
+            logo: item.logo || '',
+            email: item.email || '',
+            phone: item.phone || '',
+            address: item.address || '',
+            status: (item.status as any) || 'active',
+            joinedAt: item.joined_at || '',
+            password: item.password || 'client123'
+          })));
+        }
+      });
+    }).subscribe();
+
+    const projSub = supabase.channel('projects-realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => {
+      supabase.from('projects').select('*').then(({ data }) => {
+        if (data) {
+          setProjects(data.map(item => ({
+            id: item.id,
+            name: item.name,
+            description: item.description || '',
+            clientId: item.client_id || '',
+            progress: Number(item.progress || 0),
+            status: (item.status as any) || 'planning',
+            startDate: item.start_date || '',
+            endDate: item.end_date || '',
+            budget: Number(item.budget || 0),
+            category: item.category || '',
+            tasks: (item.tasks as any) || []
+          })));
+        }
+      });
+    }).subscribe();
+
+    const timelineSub = supabase.channel('timeline-realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'timeline' }, () => {
+      supabase.from('timeline').select('*').then(({ data }) => {
+        if (data) {
+          setTimeline(data.map(item => ({
+            id: item.id,
+            projectId: item.project_id || '',
+            clientId: item.client_id || '',
+            date: item.date || '',
+            title: item.title,
+            description: item.description || '',
+            type: (item.type || 'checkpoint') as any
+          })));
+        }
+      });
+    }).subscribe();
+
+    const filesSub = supabase.channel('files-realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'files' }, () => {
+      supabase.from('files').select('*').then(({ data }) => {
+        if (data) {
+          setFiles(data.map(item => ({
+            id: item.id,
+            name: item.name,
+            size: item.size || '0 KB',
+            category: (item.category as any) || 'spec',
+            uploadedBy: item.uploaded_by || 'Admin',
+            uploadedAt: item.uploaded_at || '',
+            version: Number(item.version || 1),
+            clientId: item.client_id || '',
+            projectId: item.project_id || '',
+            versions: (item.versions as any) || []
+          })));
+        }
+      });
+    }).subscribe();
+
+    const feedbackSub = supabase.channel('feedbacks-realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'feedbacks' }, () => {
+      supabase.from('feedbacks').select('*').then(({ data }) => {
+        if (data) {
+          setFeedbacks(data.map(item => ({
+            id: item.id,
+            clientId: item.client_id || '',
+            projectId: item.project_id || '',
+            authorName: item.author_name || 'Anonymous',
+            text: item.text || '',
+            rating: Number(item.rating || 5),
+            status: (item.status as any) || 'pending',
+            createdAt: item.created_at || '',
+            replies: (item.replies as any) || []
+          })));
+        }
+      });
+    }).subscribe();
+
+    const invoiceSub = supabase.channel('invoices-realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => {
+      supabase.from('invoices').select('*').then(({ data }) => {
+        if (data) {
+          setInvoices(data.map(item => ({
+            id: item.id,
+            invoiceNo: item.invoice_no || '',
+            clientId: item.client_id || '',
+            description: item.description || '',
+            amount: Number(item.amount || 0),
+            status: item.status as any,
+            issuedAt: item.issued_at || '',
+            dueDate: item.due_date || '',
+            items: (item.items as any) || []
+          })));
+        }
+      });
+    }).subscribe();
+
+    const meetSub = supabase.channel('meetings-realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, () => {
+      supabase.from('meetings').select('*').then(({ data }) => {
+        if (data) {
+          setMeetings(data.map(item => ({
+            id: item.id,
+            title: item.title,
+            description: item.description || '',
+            datetime: item.datetime || '',
+            clientId: item.client_id || '',
+            meetLink: item.meet_link || '',
+            organizer: item.organizer || '',
+            notes: (item.notes as any) || [],
+            status: item.status as any
+          })));
+        }
+      });
+    }).subscribe();
+
+    return () => {
+      supabase.removeChannel(clientSub);
+      supabase.removeChannel(projSub);
+      supabase.removeChannel(timelineSub);
+      supabase.removeChannel(filesSub);
+      supabase.removeChannel(feedbackSub);
+      supabase.removeChannel(invoiceSub);
+      supabase.removeChannel(meetSub);
+    };
+  }, []);
+
   // 4. ACTION DISPATCH WRAPPERS (PROMOTING STATE UPDATES)
   
   // Audits logger
@@ -185,6 +499,27 @@ export default function App() {
       read: false
     };
     setNotifications(prev => [newNotif, ...prev]);
+
+    // Async push to Supabase
+    safeSupaInsert('audit_logs', {
+      id: newLog.id,
+      user_id: newLog.userId,
+      user_name: newLog.userName,
+      action: newLog.action,
+      details: newLog.details,
+      timestamp: newLog.timestamp,
+      client_id: newLog.clientId || null
+    });
+
+    safeSupaInsert('notifications', {
+      id: newNotif.id,
+      client_id: newNotif.clientId || null,
+      title: newNotif.title,
+      text: newNotif.text,
+      type: newNotif.type,
+      created_at: newNotif.createdAt,
+      read: newNotif.read
+    });
   };
 
   // Switch/Impersonate another user
@@ -217,12 +552,39 @@ export default function App() {
     };
     setClients(prev => [...prev, clientRecord]);
     writeAuditLog('Client Onboarded', `Added company account profile for ${clientRecord.name} (${clientRecord.industry}).`, clientRecord.id);
+
+    // Save client public profile
+    safeSupaInsert('clients', {
+      id: clientRecord.id,
+      name: clientRecord.name,
+      industry: clientRecord.industry || '',
+      logo: clientRecord.logo || '',
+      email: clientRecord.email || '',
+      phone: clientRecord.phone || '',
+      address: clientRecord.address || '',
+      status: clientRecord.status || 'active',
+      joined_at: clientRecord.joinedAt,
+      password: clientRecord.password || 'client123'
+    });
   };
 
   const handleUpdateClientCredentials = (clientId: string, email: string, password?: string) => {
     setClients(prev => prev.map(c => {
       if (c.id === clientId) {
-        return { ...c, email, password };
+        const updated = { ...c, email, password };
+        safeSupaInsert('clients', {
+          id: updated.id,
+          name: updated.name,
+          industry: updated.industry || '',
+          logo: updated.logo || '',
+          email: updated.email || '',
+          phone: updated.phone || '',
+          address: updated.address || '',
+          status: updated.status || 'active',
+          joined_at: updated.joinedAt,
+          password: updated.password || 'client123'
+        });
+        return updated;
       }
       return c;
     }));
@@ -252,6 +614,31 @@ export default function App() {
     setTimeline(prev => [...prev, timelineRecord]);
 
     writeAuditLog('Project Pipeline Built', `Registered active development folder: ${projectRecord.name}`, projectRecord.clientId);
+
+    // Sync to cloud
+    safeSupaInsert('projects', {
+      id: projectRecord.id,
+      name: projectRecord.name,
+      description: projectRecord.description || '',
+      client_id: projectRecord.clientId,
+      progress: projectRecord.progress,
+      status: projectRecord.status,
+      start_date: projectRecord.startDate,
+      end_date: projectRecord.endDate,
+      budget: projectRecord.budget,
+      category: projectRecord.category,
+      tasks: projectRecord.tasks
+    });
+
+    safeSupaInsert('timeline', {
+      id: timelineRecord.id,
+      project_id: timelineRecord.projectId,
+      client_id: timelineRecord.clientId,
+      date: timelineRecord.date,
+      title: timelineRecord.title,
+      description: timelineRecord.description,
+      type: timelineRecord.type
+    });
   };
 
   const handleUpdateProjectProgress = (projectId: string, progress: number, status: Project['status']) => {
@@ -270,9 +657,33 @@ export default function App() {
               type: 'milestone'
             };
             setTimeline(t => [...t, timelineRecord]);
+            safeSupaInsert('timeline', {
+              id: timelineRecord.id,
+              project_id: timelineRecord.projectId,
+              client_id: timelineRecord.clientId,
+              date: timelineRecord.date,
+              title: timelineRecord.title,
+              description: timelineRecord.description,
+              type: timelineRecord.type
+            });
           }, 100);
         }
-        return { ...p, progress, status };
+
+        const updated = { ...p, progress, status };
+        safeSupaInsert('projects', {
+          id: updated.id,
+          name: updated.name,
+          description: updated.description || '',
+          client_id: updated.clientId,
+          progress: updated.progress,
+          status: updated.status,
+          start_date: updated.startDate,
+          end_date: updated.endDate,
+          budget: updated.budget,
+          category: updated.category,
+          tasks: updated.tasks
+        });
+        return updated;
       }
       return p;
     }));
@@ -289,7 +700,21 @@ export default function App() {
     };
     setProjects(prev => prev.map(p => {
       if (p.id === projectId) {
-        return { ...p, tasks: [...p.tasks, taskRecord] };
+        const updated = { ...p, tasks: [...p.tasks, taskRecord] };
+        safeSupaInsert('projects', {
+          id: updated.id,
+          name: updated.name,
+          description: updated.description || '',
+          client_id: updated.clientId,
+          progress: updated.progress,
+          status: updated.status,
+          start_date: updated.startDate,
+          end_date: updated.endDate,
+          budget: updated.budget,
+          category: updated.category,
+          tasks: updated.tasks
+        });
+        return updated;
       }
       return p;
     }));
@@ -299,15 +724,27 @@ export default function App() {
   const handleUpdateTaskStatus = (projectId: string, taskId: string, status: Task['status']) => {
     setProjects(prev => prev.map(p => {
       if (p.id === projectId) {
-        return {
-          ...p,
-          tasks: p.tasks.map(t => {
-            if (t.id === taskId) {
-              return { ...t, status };
-            }
-            return t;
-          })
-        };
+        const nextTasks = p.tasks.map(t => {
+          if (t.id === taskId) {
+            return { ...t, status };
+          }
+          return t;
+        });
+        const updated = { ...p, tasks: nextTasks };
+        safeSupaInsert('projects', {
+          id: updated.id,
+          name: updated.name,
+          description: updated.description || '',
+          client_id: updated.clientId,
+          progress: updated.progress,
+          status: updated.status,
+          start_date: updated.startDate,
+          end_date: updated.endDate,
+          budget: updated.budget,
+          category: updated.category,
+          tasks: updated.tasks
+        });
+        return updated;
       }
       return p;
     }));
@@ -321,6 +758,7 @@ export default function App() {
     if (!proj) return;
     setProjects(prev => prev.filter(p => p.id !== projectId));
     writeAuditLog('Project Removed', `Archived and dissociated developmental module folder: ${proj.name}`, proj.clientId);
+    safeSupaDelete('projects', projectId);
   };
 
   // Add Document File
@@ -356,6 +794,29 @@ export default function App() {
     setTimeline(prev => [...prev, timelineRecord]);
 
     writeAuditLog('Asset Deposited', `Uploaded folder item: ${fileRecord.name}`, fileRecord.clientId);
+
+    safeSupaInsert('files', {
+      id: fileRecord.id,
+      name: fileRecord.name,
+      size: fileRecord.size,
+      category: fileRecord.category,
+      uploaded_by: fileRecord.uploadedBy,
+      uploaded_at: fileRecord.uploadedAt,
+      version: fileRecord.version,
+      client_id: fileRecord.clientId,
+      project_id: fileRecord.projectId || null,
+      versions: fileRecord.versions
+    });
+
+    safeSupaInsert('timeline', {
+      id: timelineRecord.id,
+      project_id: timelineRecord.projectId || null,
+      client_id: timelineRecord.clientId,
+      date: timelineRecord.date,
+      title: timelineRecord.title,
+      description: timelineRecord.description,
+      type: timelineRecord.type
+    });
   };
 
   const handleAddFileVersion = (fileId: string, description: string, size: string) => {
@@ -369,12 +830,25 @@ export default function App() {
           changedBy: currentUser.name,
           description
         };
-        return {
+        const updated = {
           ...f,
           version: nextVer,
           size,
           versions: [newVerRec, ...f.versions]
         };
+        safeSupaInsert('files', {
+          id: updated.id,
+          name: updated.name,
+          size: updated.size,
+          category: updated.category,
+          uploaded_by: updated.uploadedBy,
+          uploaded_at: updated.uploadedAt,
+          version: updated.version,
+          client_id: updated.clientId,
+          project_id: updated.projectId || null,
+          versions: updated.versions
+        });
+        return updated;
       }
       return f;
     }));
@@ -389,6 +863,7 @@ export default function App() {
     if (!file) return;
     setFiles(prev => prev.filter(f => f.id !== fileId));
     writeAuditLog('Asset Purged', `Deleted file record: ${file.name}`, file.clientId);
+    safeSupaDelete('files', fileId);
   };
 
   // Feedbacks rating handlers
@@ -401,6 +876,18 @@ export default function App() {
     };
     setFeedbacks(prev => [...prev, feedbackRecord]);
     writeAuditLog('Client Feedback Lodged', `Left star rating comment on delivery checkpoints.`, feedbackRecord.clientId);
+
+    safeSupaInsert('feedbacks', {
+      id: feedbackRecord.id,
+      client_id: feedbackRecord.clientId,
+      project_id: feedbackRecord.projectId || null,
+      author_name: feedbackRecord.authorName,
+      text: feedbackRecord.text,
+      rating: feedbackRecord.rating,
+      status: feedbackRecord.status,
+      created_at: feedbackRecord.createdAt,
+      replies: feedbackRecord.replies
+    });
   };
 
   const handleReplyFeedback = (feedbackId: string, replyText: string) => {
@@ -414,11 +901,23 @@ export default function App() {
 
     setFeedbacks(prev => prev.map(f => {
       if (f.id === feedbackId) {
-        return {
+        const updated = {
           ...f,
-          status: 'resolved',
+          status: 'resolved' as const,
           replies: [...f.replies, replyRecord]
         };
+        safeSupaInsert('feedbacks', {
+          id: updated.id,
+          client_id: updated.clientId,
+          project_id: updated.projectId || null,
+          author_name: updated.authorName,
+          text: updated.text,
+          rating: updated.rating,
+          status: updated.status,
+          created_at: updated.createdAt,
+          replies: updated.replies
+        });
+        return updated;
       }
       return f;
     }));
@@ -437,6 +936,16 @@ export default function App() {
 
     const pName = projects.find(p => p.id === event.projectId)?.name || 'Project';
     writeAuditLog('Timeline Event Released', `Appended roadmap milestone "${event.title}" for project "${pName}"`, event.clientId);
+
+    safeSupaInsert('timeline', {
+      id: timelineRecord.id,
+      project_id: timelineRecord.projectId || null,
+      client_id: timelineRecord.clientId,
+      date: timelineRecord.date,
+      title: timelineRecord.title,
+      description: timelineRecord.description,
+      type: timelineRecord.type
+    });
   };
 
   // Compile billing invoice
@@ -465,12 +974,46 @@ export default function App() {
     setTimeline(prev => [...prev, timelineRecord]);
 
     writeAuditLog('Invoicing Issued', `Dispatched ledger statement ${invoiceNo} for $${invoiceRecord.amount.toLocaleString()}`, invoiceRecord.clientId);
+
+    safeSupaInsert('invoices', {
+      id: invoiceRecord.id,
+      invoice_no: invoiceRecord.invoiceNo,
+      client_id: invoiceRecord.clientId,
+      description: invoiceRecord.description,
+      amount: invoiceRecord.amount,
+      status: invoiceRecord.status,
+      issued_at: invoiceRecord.issuedAt,
+      due_date: invoiceRecord.dueDate,
+      items: invoiceRecord.items
+    });
+
+    safeSupaInsert('timeline', {
+      id: timelineRecord.id,
+      project_id: timelineRecord.projectId || null,
+      client_id: timelineRecord.clientId,
+      date: timelineRecord.date,
+      title: timelineRecord.title,
+      description: timelineRecord.description,
+      type: timelineRecord.type
+    });
   };
 
   const handlePayInvoice = (invoiceId: string) => {
     setInvoices(prev => prev.map(i => {
       if (i.id === invoiceId) {
-        return { ...i, status: 'paid' };
+        const updated = { ...i, status: 'paid' as const };
+        safeSupaInsert('invoices', {
+          id: updated.id,
+          invoice_no: updated.invoiceNo,
+          client_id: updated.clientId,
+          description: updated.description,
+          amount: updated.amount,
+          status: updated.status,
+          issued_at: updated.issuedAt,
+          due_date: updated.dueDate,
+          items: updated.items
+        });
+        return updated;
       }
       return i;
     }));
@@ -491,6 +1034,16 @@ export default function App() {
     setTimeline(prev => [...prev, timelineRecord]);
 
     writeAuditLog('Invoice Settle Captured', `Captured credit card settling of invoice sheet ${invNo}`, invClient);
+
+    safeSupaInsert('timeline', {
+      id: timelineRecord.id,
+      project_id: timelineRecord.projectId || null,
+      client_id: timelineRecord.clientId,
+      date: timelineRecord.date,
+      title: timelineRecord.title,
+      description: timelineRecord.description,
+      type: timelineRecord.type
+    });
   };
 
   // Walkthrough schedule creators
@@ -517,12 +1070,46 @@ export default function App() {
     setTimeline(prev => [...prev, timelineRecord]);
 
     writeAuditLog('Walkthrough Session Scheduled', `Created Google Meet calendar invitation: "${meetRecord.title}"`, meetRecord.clientId);
+
+    safeSupaInsert('meetings', {
+      id: meetRecord.id,
+      title: meetRecord.title,
+      description: meetRecord.description,
+      datetime: meetRecord.datetime,
+      client_id: meetRecord.clientId,
+      meet_link: meetRecord.meetLink,
+      organizer: meetRecord.organizer,
+      notes: meetRecord.notes,
+      status: meetRecord.status
+    });
+
+    safeSupaInsert('timeline', {
+      id: timelineRecord.id,
+      project_id: timelineRecord.projectId || null,
+      client_id: timelineRecord.clientId,
+      date: timelineRecord.date,
+      title: timelineRecord.title,
+      description: timelineRecord.description,
+      type: timelineRecord.type
+    });
   };
 
   const handleAddMeetingNote = (meetingId: string, noteText: string) => {
     setMeetings(prev => prev.map(m => {
       if (m.id === meetingId) {
-        return { ...m, notes: [...m.notes, noteText] };
+        const updated = { ...m, notes: [...m.notes, noteText] };
+        safeSupaInsert('meetings', {
+          id: updated.id,
+          title: updated.title,
+          description: updated.description,
+          datetime: updated.datetime,
+          client_id: updated.clientId,
+          meet_link: updated.meetLink,
+          organizer: updated.organizer,
+          notes: updated.notes,
+          status: updated.status
+        });
+        return updated;
       }
       return m;
     }));
@@ -535,7 +1122,19 @@ export default function App() {
   const handleCancelMeeting = (meetingId: string) => {
     setMeetings(prev => prev.map(m => {
       if (m.id === meetingId) {
-        return { ...m, status: 'canceled' };
+        const updated = { ...m, status: 'canceled' as const };
+        safeSupaInsert('meetings', {
+          id: updated.id,
+          title: updated.title,
+          description: updated.description,
+          datetime: updated.datetime,
+          client_id: updated.clientId,
+          meet_link: updated.meetLink,
+          organizer: updated.organizer,
+          notes: updated.notes,
+          status: updated.status
+        });
+        return updated;
       }
       return m;
     }));
@@ -547,11 +1146,40 @@ export default function App() {
 
   // Notifications indicators
   const handleMarkNotifRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    setNotifications(prev => prev.map(n => {
+      if (n.id === id) {
+        const updated = { ...n, read: true };
+        safeSupaInsert('notifications', {
+          id: updated.id,
+          client_id: updated.clientId || null,
+          title: updated.title,
+          text: updated.text,
+          type: updated.type,
+          created_at: updated.createdAt,
+          read: updated.read
+        });
+        return updated;
+      }
+      return n;
+    }));
   };
 
   const handleMarkAllNotifsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    setNotifications(prev => {
+      const updatedList = prev.map(n => ({ ...n, read: true }));
+      updatedList.forEach(updated => {
+        safeSupaInsert('notifications', {
+          id: updated.id,
+          client_id: updated.clientId || null,
+          title: updated.title,
+          text: updated.text,
+          type: updated.type,
+          created_at: updated.createdAt,
+          read: updated.read
+        });
+      });
+      return updatedList;
+    });
   };
 
   const handleUpdateProfile = (updated: Omit<User, 'id' | 'role' | 'clientId' | 'companyName'>) => {
