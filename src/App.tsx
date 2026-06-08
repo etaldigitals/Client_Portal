@@ -38,7 +38,7 @@ import ReportsView from './components/ReportsView';
 import InvoicesView from './components/InvoicesView';
 import MeetingsView from './components/MeetingsView';
 import ProfileView from './components/ProfileView';
-import { supabase } from './utils/supabaseClient';
+import { supabase, isSupabaseConfigured } from './utils/supabaseClient';
 
 // Initial boilerplates datasets
 import { 
@@ -160,12 +160,7 @@ export default function App() {
     files, feedbacks, invoices, meetings, notifications, auditLogs
   ]);
 
-  // Supabase connection validation
-  const isSupabaseConfigured = 
-    (import.meta as any).env.VITE_SUPABASE_URL && 
-    (import.meta as any).env.VITE_SUPABASE_URL !== 'https://placeholder-url.supabase.co' &&
-    (import.meta as any).env.VITE_SUPABASE_ANON_KEY &&
-    (import.meta as any).env.VITE_SUPABASE_ANON_KEY !== 'placeholder-key';
+  // Supabase connection validation matches global import from supabaseClient
 
   // State sync and save helpers
   const safeSupaInsert = async (table: string, record: any) => {

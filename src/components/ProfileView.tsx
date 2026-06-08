@@ -21,6 +21,7 @@ import {
   Check
 } from 'lucide-react';
 import { User, ClientCompany, NotificationItem } from '../types';
+import { isSupabaseConfigured } from '../utils/supabaseClient';
 
 interface ProfileViewProps {
   currentUser: User;
@@ -60,11 +61,7 @@ export default function ProfileView({
   const [showSql, setShowSql] = useState(false);
   const [activeStepTab, setActiveStepTab] = useState<'vercel' | 'supabase'>('vercel');
 
-  const isSupabaseConfigured = 
-    (import.meta as any).env.VITE_SUPABASE_URL && 
-    (import.meta as any).env.VITE_SUPABASE_URL !== 'https://placeholder-url.supabase.co' &&
-    (import.meta as any).env.VITE_SUPABASE_ANON_KEY &&
-    (import.meta as any).env.VITE_SUPABASE_ANON_KEY !== 'placeholder-key';
+  // isSupabaseConfigured is imported from supabaseClient
 
   const sqlSchema = `-- SQL Configuration Script for Supabase SQL Editor
 -- Create database tables matching your Client Portal layout models
