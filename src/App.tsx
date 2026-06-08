@@ -183,9 +183,10 @@ export default function App() {
     }
   };
 
-  // LOAD CLOUD DATA ON MOUNT
+  // LOAD CLOUD DATA ON AUTHENTICATION/MOUNT
   useEffect(() => {
     if (!isSupabaseConfigured) return;
+    if (!isAuthenticated) return;
 
     const loadAllDatabaseSyncData = async () => {
       try {
@@ -466,7 +467,7 @@ export default function App() {
       supabase.removeChannel(invoiceSub);
       supabase.removeChannel(meetSub);
     };
-  }, []);
+  }, [isAuthenticated]);
 
   // 4. ACTION DISPATCH WRAPPERS (PROMOTING STATE UPDATES)
   
@@ -1185,29 +1186,12 @@ export default function App() {
     writeAuditLog('Profile Contact Altered', 'Updated accounts mail information and telecom preferences.');
   };
 
-  // Secure logout action: allows clean logout or full sandbox reset
+  // Secure logout action: allows safe and clean logout without wiping local/cloud database
   const handleLogout = () => {
-    const shouldReset = confirm('Would you like to clear all custom sandbox data and restore defaults before logging out?\n\n- Click "OK" to wipe all changes & logout.\n- Click "Cancel" to just logout securely, preserving your configured clients/data.');
-    if (shouldReset) {
-      localStorage.clear();
-      setIsAuthenticated(false);
-      setCurrentUser(defaultAdminUser);
-      setClients(initialClients);
-      setProjects(initialProjects);
-      setTimeline(initialTimeline);
-      setFiles(initialFiles);
-      setFeedbacks(initialFeedback);
-      setInvoices(initialInvoices);
-      setMeetings(initialMeetings);
-      setNotifications(initialNotifications);
-      setAuditLogs(initialAuditLogs);
-      setActiveTab('dashboard');
-      alert('⚡ Local storage cleared. Default presets restored.');
-    } else {
-      setIsAuthenticated(false);
-      localStorage.setItem(STORAGE_KEYS.AUTH, 'false');
-      localStorage.removeItem(STORAGE_KEYS.USER);
-    }
+    setIsAuthenticated(false);
+    setCurrentUser(defaultAdminUser);
+    localStorage.setItem(STORAGE_KEYS.AUTH, 'false');
+    localStorage.removeItem(STORAGE_KEYS.USER);
     
     // Clear login fields upon clean logout
     setLoginEmail('');
